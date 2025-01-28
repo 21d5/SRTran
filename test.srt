@@ -1,0 +1,14 @@
+1
+00:00:01,000 --> 00:00:04,000
+Hello, welcome to this video.
+This is a test subtitle.
+
+2
+00:00:04,500 --> 00:00:08,000
+We will use this to test
+our translation tool.
+
+3
+00:00:08,500 --> 00:00:12,000
+Thank you for watching!
+Have a great day.
