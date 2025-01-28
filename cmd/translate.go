@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"os"
 
@@ -76,12 +75,13 @@ Example:
 		}
 
 		// Translate subtitles
-		if err := service.TranslateSubtitles(context.Background(), subtitles, sourceLanguage, targetLanguage); err != nil {
+		translated, err := service.Translate(cmd.Context(), subtitles, sourceLanguage, targetLanguage)
+		if err != nil {
 			return fmt.Errorf("failed to translate subtitles: %w", err)
 		}
 
 		// Write output file
-		if err := parser.Write(outputFile, subtitles); err != nil {
+		if err := parser.Write(outputFile, translated); err != nil {
 			return fmt.Errorf("failed to write output file: %w", err)
 		}
 
