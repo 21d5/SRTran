@@ -3,6 +3,7 @@ module github.com/soup/SRTran
 go 1.23.5
 
 require (
+	github.com/BurntSushi/toml v1.4.0
 	github.com/rs/zerolog v1.33.0
 	github.com/sashabaranov/go-openai v1.36.1
 	github.com/spf13/cobra v1.8.1

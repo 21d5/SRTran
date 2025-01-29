@@ -2,9 +2,8 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 
-	"github.com/sashabaranov/go-openai"
+	"github.com/soup/SRTran/config"
 	"github.com/soup/SRTran/srt"
 	"github.com/soup/SRTran/translate"
 	"github.com/spf13/cobra"
@@ -36,39 +35,19 @@ Example:
 			fmt.Printf("Translating %s from %s to %s\n", inputFile, sourceLanguage, targetLanguage)
 		}
 
-		// Get configuration from environment
-		var apiKey string
-		var backend translate.Backend
-		var model string
+		// Get configuration
+		cfg, err := config.LoadConfig(configFile)
+		if err != nil {
+			return fmt.Errorf("failed to load config: %w", err)
+		}
 
-		// Check for Google AI API key first
-		apiKey = os.Getenv("GOOGLE_AI_API_KEY")
-		if apiKey != "" {
-			backend = translate.BackendGoogleAI
-			model = os.Getenv("GOOGLE_AI_MODEL")
-			if model == "" {
-				model = "gemini-2.0-flash-exp" // default model
-			}
-		} else {
-			// Check for OpenRouter API key
-			apiKey = os.Getenv("OPENROUTER_API_KEY")
-			if apiKey != "" {
-				backend = translate.BackendOpenRouter
-				model = os.Getenv("OPENROUTER_MODEL")
-				if model == "" {
-					model = "anthropic/claude-3.5-sonnet" // default model
-				}
+		// Print configuration info
+		fmt.Printf("Using %s backend with model: %s\n", cfg.Backend, cfg.Model)
+		if verbose {
+			if configFile != "" {
+				fmt.Printf("Configuration loaded from: %s\n", configFile)
 			} else {
-				// Finally, check for OpenAI API key
-				apiKey = os.Getenv("OPENAI_API_KEY")
-				if apiKey == "" {
-					return fmt.Errorf("one of GOOGLE_AI_API_KEY, OPENROUTER_API_KEY, or OPENAI_API_KEY environment variable is required")
-				}
-				backend = translate.BackendOpenAI
-				model = os.Getenv("OPENAI_MODEL")
-				if model == "" {
-					model = openai.GPT4 // default model
-				}
+				fmt.Println("Using environment variables for configuration")
 			}
 		}
 
@@ -83,14 +62,14 @@ Example:
 
 		// Configure translation service
 		config := translate.ServiceConfig{
-			APIKey:  apiKey,
-			Model:   model,
+			APIKey:  cfg.APIKey,
+			Model:   cfg.Model,
 			Verbose: verbose,
-			Backend: backend,
+			Backend: translate.Backend(cfg.Backend),
 		}
 
 		// If using OpenRouter, configure its specific settings
-		if backend == translate.BackendOpenRouter {
+		if cfg.Backend == "openrouter" {
 			config.BaseURL = "https://openrouter.ai/api/v1"
 		}
 
