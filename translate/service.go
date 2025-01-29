@@ -51,7 +51,7 @@ func NewService(config ServiceConfig) (*Service, error) {
 	service := &Service{
 		config:  config,
 		verbose: config.Verbose,
-		logger:  zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout}),
+		logger:  zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout}).With().Timestamp().Logger(),
 	}
 
 	switch config.Backend {
@@ -101,9 +101,9 @@ func (s *Service) translateBatch(ctx context.Context, subtitles []srt.Subtitle, 
 
 	switch s.config.Backend {
 	case BackendOpenAI, BackendOpenRouter:
-		cleanTranslations, err = s.translateWithOpenAI(ctx, batchText.String(), subtitles, sourceLang, targetLang)
+		cleanTranslations, err = s.translateWithOpenAI(ctx, batchText.String(), sourceLang, targetLang)
 	case BackendGoogleAI:
-		cleanTranslations, err = s.translateWithGoogleAI(ctx, batchText.String(), subtitles, sourceLang, targetLang)
+		cleanTranslations, err = s.translateWithGoogleAI(ctx, batchText.String(), sourceLang, targetLang)
 	default:
 		return nil, fmt.Errorf("unsupported backend: %s", s.config.Backend)
 	}
@@ -134,7 +134,7 @@ func (s *Service) translateBatch(ctx context.Context, subtitles []srt.Subtitle, 
 	return result, nil
 }
 
-func (s *Service) translateWithOpenAI(ctx context.Context, text string, subtitles []srt.Subtitle, sourceLang, targetLang string) ([][]string, error) {
+func (s *Service) translateWithOpenAI(ctx context.Context, text string, sourceLang, targetLang string) ([][]string, error) {
 	// use configured model or fallback to GPT-4
 	model := openai.GPT4
 	if s.config.Model != "" {
@@ -202,7 +202,7 @@ func (s *Service) translateWithOpenAI(ctx context.Context, text string, subtitle
 	return cleanTranslations, nil
 }
 
-func (s *Service) translateWithGoogleAI(ctx context.Context, text string, subtitles []srt.Subtitle, sourceLang, targetLang string) ([][]string, error) {
+func (s *Service) translateWithGoogleAI(ctx context.Context, text string, sourceLang, targetLang string) ([][]string, error) {
 	model := "gemini-2.0-flash-exp"
 	if s.config.Model != "" {
 		model = s.config.Model

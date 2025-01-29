@@ -39,53 +39,61 @@ func (p *Parser) Parse(filename string) ([]Subtitle, error) {
 
 	var subtitles []Subtitle
 	var current *Subtitle
-	var isText bool
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := scanner.Text()
 		line = strings.TrimSpace(line)
 
+		// Skip empty lines
 		if line == "" {
-			isText = false
-			if current != nil {
-				subtitles = append(subtitles, *current)
-				current = nil
-			}
 			continue
 		}
 
-		if current == nil {
-			index, err := strconv.Atoi(line)
-			if err != nil {
-				return nil, fmt.Errorf("invalid subtitle index: %s", line)
+		// Check if this is a new subtitle index
+		if index, err := strconv.Atoi(line); err == nil {
+			// Save the previous subtitle if it exists
+			if current != nil && current.Start != "" {
+				subtitles = append(subtitles, *current)
 			}
+			// Start a new subtitle
 			current = &Subtitle{Index: index}
 			continue
 		}
 
-		if current.Start == "" {
-			times := strings.Split(line, " --> ")
-			if len(times) != 2 {
-				return nil, fmt.Errorf("invalid timestamp format: %s", line)
-			}
-			current.Start = times[0]
-			current.End = times[1]
-			isText = true
+		// If we don't have a current subtitle, skip this line
+		if current == nil {
 			continue
 		}
 
-		if isText {
-			current.Text = append(current.Text, line)
+		// Try to parse as timestamp
+		if current.Start == "" {
+			if strings.Contains(line, " --> ") {
+				times := strings.Split(line, " --> ")
+				if len(times) == 2 {
+					current.Start = times[0]
+					current.End = times[1]
+					continue
+				}
+			}
+			continue
 		}
+
+		// If we get here, this must be subtitle text
+		current.Text = append(current.Text, line)
 	}
 
-	if current != nil {
+	// Don't forget the last subtitle
+	if current != nil && current.Start != "" {
 		subtitles = append(subtitles, *current)
 	}
 
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("error reading file: %w", err)
+	}
+
+	if len(subtitles) == 0 {
+		return nil, fmt.Errorf("no valid subtitles found in file")
 	}
 
 	if p.Verbose {
