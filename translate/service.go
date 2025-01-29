@@ -54,6 +54,28 @@ type Service struct {
 // batch size for translations
 const defaultBatchSize = 20
 
+// translationPrompt is the standard prompt template for all translation models
+const translationPrompt = `You are a professional subtitle translator. Translate exactly %s to %s following these rules:
+1. Preserve exact timing by keeping text length similar
+2. Maintain original line breaks and formatting symbols (e.g., <i>, [music])
+3. Never split or merge subtitle blocks
+4. Keep proper nouns/technical terms in original language when no direct translation exists
+5. Use colloquial speech matching the source register
+6. Handle idioms with culturally equivalent expressions
+7. Preserve numbers, measurements, and codes exactly
+8. Maintain capitalization style for on-screen text
+9. Keep placeholder markers like [%%1] unchanged
+10. Use contractions where natural for spoken language
+
+Format:
+[N] (subtitle number)
+Translated text (same line breaks)
+===SUBTITLE=== separator between blocks
+
+Here are the subtitles to translate:
+
+%s`
+
 // NewService creates a new translation service
 func NewService(config ServiceConfig) (*Service, error) {
 	if config.APIKey == "" {
@@ -234,13 +256,11 @@ func (s *Service) translateBatchInternal(ctx context.Context, subtitles []srt.Su
 }
 
 func (s *Service) translateWithOpenAI(ctx context.Context, text string, sourceLang, targetLang string) ([][]string, error) {
-	// use configured model or fallback to GPT-4
 	model := openai.GPT4
 	if s.config.Model != "" {
 		model = s.config.Model
 	}
 
-	// wait for rate limit before making request
 	if err := s.waitForRateLimit(ctx); err != nil {
 		return nil, fmt.Errorf("rate limit wait interrupted: %w", err)
 	}
@@ -251,28 +271,8 @@ func (s *Service) translateWithOpenAI(ctx context.Context, text string, sourceLa
 			Model: model,
 			Messages: []openai.ChatCompletionMessage{
 				{
-					Role: openai.ChatMessageRoleSystem,
-					Content: fmt.Sprintf(
-						"You are a professional subtitle translator. Translate exactly %s to %s following these rules:\n"+
-							"1. Preserve exact timing by keeping text length similar\n"+
-							"2. Maintain original line breaks and formatting symbols (e.g., <i>, [music])\n"+
-							"3. Never split or merge subtitle blocks\n"+
-							"4. Keep proper nouns/technical terms in original language when no direct translation exists\n"+
-							"5. Use colloquial speech matching the source register\n"+
-							"6. Handle idioms with culturally equivalent expressions\n"+
-							"7. Preserve numbers, measurements, and codes exactly\n"+
-							"8. Maintain capitalization style for on-screen text\n"+
-							"9. Keep placeholder markers like [%%1] unchanged\n"+
-							"10. Use contractions where natural for spoken language\n\n"+
-							"Format:\n"+
-							"[N] (subtitle number)\n"+
-							"Translated text (same line breaks)\n"+
-							"===SUBTITLE=== separator between blocks",
-						sourceLang, targetLang),
-				},
-				{
-					Role:    openai.ChatMessageRoleUser,
-					Content: text,
+					Role:    openai.ChatMessageRoleSystem,
+					Content: fmt.Sprintf(translationPrompt, sourceLang, targetLang, text),
 				},
 			},
 		},
@@ -334,24 +334,7 @@ func (s *Service) translateWithGoogleAI(ctx context.Context, text string, source
 		model = s.config.Model
 	}
 
-	prompt := fmt.Sprintf(
-		"You are a professional subtitle translator. Translate exactly %s to %s following these rules:\n"+
-			"1. Preserve exact timing by keeping text length similar\n"+
-			"2. Maintain original line breaks and formatting symbols (e.g., <i>, [music])\n"+
-			"3. Never split or merge subtitle blocks\n"+
-			"4. Keep proper nouns/technical terms in original language when no direct translation exists\n"+
-			"5. Use colloquial speech matching the source register\n"+
-			"6. Handle idioms with culturally equivalent expressions\n"+
-			"7. Preserve numbers, measurements, and codes exactly\n"+
-			"8. Maintain capitalization style for on-screen text\n"+
-			"9. Keep placeholder markers like [%%1] unchanged\n"+
-			"10. Use contractions where natural for spoken language\n\n"+
-			"Format:\n"+
-			"[N] (subtitle number)\n"+
-			"Translated text (same line breaks)\n"+
-			"===SUBTITLE=== separator between blocks\n\n"+
-			"Here are the subtitles to translate:\n\n%s",
-		sourceLang, targetLang, text)
+	prompt := fmt.Sprintf(translationPrompt, sourceLang, targetLang, text)
 
 	maxAttempts := 5
 	var lastErr error
