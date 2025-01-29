@@ -1,10 +1,14 @@
 # SRTran
 
-SRTran is a command-line tool for translating subtitle files (.srt) from one language to another using OpenAI's language models.
+SRTran is a command-line tool for translating subtitle files (.srt) from one language to another using various AI language models.
 
 ## Features
 
 - Translate .srt subtitle files between any language pair
+- Support for multiple AI providers:
+  - Google AI Studio (Gemini)
+  - OpenAI (GPT-4)
+  - OpenRouter (various models)
 - Preserve subtitle timing and formatting
 - Support for verbose output to track translation progress
 - Easy-to-use command-line interface
@@ -24,7 +28,7 @@ SRTran is a command-line tool for translating subtitle files (.srt) from one lan
 
 ## Configuration
 
-SRTran supports both OpenAI and OpenRouter for translations. You can configure the service using environment variables either directly or through a `.env` file.
+SRTran supports multiple AI providers for translations. You can configure the service using environment variables either directly or through a `.env` file.
 
 1. Copy the example environment file:
    ```bash
@@ -33,25 +37,39 @@ SRTran supports both OpenAI and OpenRouter for translations. You can configure t
 
 2. Edit `.env` with your preferred configuration:
 
-   ### OpenRouter Configuration (Preferred)
+   ### Google AI Studio Configuration (Preferred)
+   ```env
+   GOOGLE_AI_API_KEY=your_google_ai_api_key_here
+   GOOGLE_AI_MODEL=gemini-2.0-flash-exp  # Optional, defaults to gemini-2.0-flash-exp
+   ```
+
+   ### OpenRouter Configuration
    ```env
    OPENROUTER_API_KEY=your_openrouter_api_key_here
-   OPENROUTER_MODEL=anthropic/claude-3.5-sonnet
+   OPENROUTER_MODEL=anthropic/claude-3.5-sonnet  # Optional, defaults to anthropic/claude-3.5-sonnet
    ```
 
-   ### OpenAI Configuration (Alternative)
+   ### OpenAI Configuration
    ```env
    OPENAI_API_KEY=your_openai_api_key_here
+   OPENAI_MODEL=gpt-4  # Optional, defaults to gpt-4
    ```
 
-The tool will automatically use OpenRouter if `OPENROUTER_API_KEY` is set, falling back to OpenAI if only `OPENAI_API_KEY` is available.
+The tool will try to use the API keys in the following order:
+1. Google AI Studio (if `GOOGLE_AI_API_KEY` is set)
+2. OpenRouter (if `OPENROUTER_API_KEY` is set)
+3. OpenAI (if `OPENAI_API_KEY` is set)
 
 Note: You can also set these environment variables directly in your shell:
 ```bash
+export GOOGLE_AI_API_KEY='your-google-ai-api-key-here'
+export GOOGLE_AI_MODEL='gemini-2.0-flash-exp'  # Optional
+# or
 export OPENROUTER_API_KEY='your-openrouter-api-key-here'
 export OPENROUTER_MODEL='anthropic/claude-3.5-sonnet'  # Optional
 # or
 export OPENAI_API_KEY='your-openai-api-key-here'
+export OPENAI_MODEL='gpt-4'  # Optional
 ```
 
 ## Usage

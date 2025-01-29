@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/sashabaranov/go-openai"
 	"github.com/soup/SRTran/srt"
 	"github.com/soup/SRTran/translate"
 	"github.com/spf13/cobra"
@@ -36,11 +37,38 @@ Example:
 		}
 
 		// Get configuration from environment
-		apiKey := os.Getenv("OPENROUTER_API_KEY")
-		if apiKey == "" {
-			apiKey = os.Getenv("OPENAI_API_KEY")
-			if apiKey == "" {
-				return fmt.Errorf("either OPENROUTER_API_KEY or OPENAI_API_KEY environment variable is required")
+		var apiKey string
+		var backend translate.Backend
+		var model string
+
+		// Check for Google AI API key first
+		apiKey = os.Getenv("GOOGLE_AI_API_KEY")
+		if apiKey != "" {
+			backend = translate.BackendGoogleAI
+			model = os.Getenv("GOOGLE_AI_MODEL")
+			if model == "" {
+				model = "gemini-2.0-flash-exp" // default model
+			}
+		} else {
+			// Check for OpenRouter API key
+			apiKey = os.Getenv("OPENROUTER_API_KEY")
+			if apiKey != "" {
+				backend = translate.BackendOpenRouter
+				model = os.Getenv("OPENROUTER_MODEL")
+				if model == "" {
+					model = "anthropic/claude-3.5-sonnet" // default model
+				}
+			} else {
+				// Finally, check for OpenAI API key
+				apiKey = os.Getenv("OPENAI_API_KEY")
+				if apiKey == "" {
+					return fmt.Errorf("one of GOOGLE_AI_API_KEY, OPENROUTER_API_KEY, or OPENAI_API_KEY environment variable is required")
+				}
+				backend = translate.BackendOpenAI
+				model = os.Getenv("OPENAI_MODEL")
+				if model == "" {
+					model = openai.GPT4 // default model
+				}
 			}
 		}
 
@@ -56,16 +84,14 @@ Example:
 		// Configure translation service
 		config := translate.ServiceConfig{
 			APIKey:  apiKey,
+			Model:   model,
 			Verbose: verbose,
+			Backend: backend,
 		}
 
 		// If using OpenRouter, configure its specific settings
-		if os.Getenv("OPENROUTER_API_KEY") != "" {
+		if backend == translate.BackendOpenRouter {
 			config.BaseURL = "https://openrouter.ai/api/v1"
-			config.Model = os.Getenv("OPENROUTER_MODEL")
-			if config.Model == "" {
-				config.Model = "anthropic/claude-3.5-sonnet" // default model
-			}
 		}
 
 		// Initialize translation service
