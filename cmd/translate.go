@@ -2,10 +2,12 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
-	"github.com/soup/SRTran/config"
-	"github.com/soup/SRTran/srt"
-	"github.com/soup/SRTran/translate"
+	"github.com/rs/zerolog"
+	"github.com/s0up4200/SRTran/config"
+	"github.com/s0up4200/SRTran/srt"
+	"github.com/s0up4200/SRTran/translate"
 	"github.com/spf13/cobra"
 )
 
@@ -42,12 +44,19 @@ Example:
 		}
 
 		// Print configuration info
-		fmt.Printf("Using %s backend with model: %s\n", cfg.Backend, cfg.Model)
+		log := zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout}).With().Timestamp().Logger()
+		log.Info().
+			Str("backend", cfg.Backend).
+			Str("model", cfg.Model).
+			Msg("configuration loaded")
+
 		if verbose {
 			if configFile != "" {
-				fmt.Printf("Configuration loaded from: %s\n", configFile)
+				log.Debug().
+					Str("config_file", configFile).
+					Msg("using configuration file")
 			} else {
-				fmt.Println("Using environment variables for configuration")
+				log.Debug().Msg("using environment variables")
 			}
 		}
 

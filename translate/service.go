@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"github.com/s0up4200/SRTran/srt"
 	openai "github.com/sashabaranov/go-openai"
-	"github.com/soup/SRTran/srt"
 	"google.golang.org/genai"
 )
 

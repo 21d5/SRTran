@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/soup/SRTran/cmd"
+	"github.com/s0up4200/SRTran/cmd"
 )
 
 func main() {

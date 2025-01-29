@@ -18,7 +18,7 @@ SRTran is a command-line tool for translating subtitle files (.srt) from one lan
 1. Ensure you have Go 1.16 or later installed
 2. Clone the repository:
    ```bash
-   git clone https://github.com/soup/SRTran.git
+   git clone https://github.com/s0up4200/SRTran.git
    cd SRTran
    ```
 3. Build the binary:
@@ -28,78 +28,82 @@ SRTran is a command-line tool for translating subtitle files (.srt) from one lan
 
 ## Configuration
 
-SRTran supports multiple AI providers for translations. You can configure the service using environment variables either directly or through a `.env` file.
+SRTran can be configured using a TOML configuration file or environment variables.
 
-1. Copy the example environment file:
-   ```bash
-   cp .env.example .env
-   ```
+### Using config.toml (Recommended)
 
-2. Edit `.env` with your preferred configuration:
+Create a `config.toml` file in one of these locations:
+- `./config.toml` (current directory)
+- `~/.config/srtran/config.toml`
+- `~/.srtran.toml`
 
-   ### Google AI Studio Configuration (Preferred)
-   ```env
-   GOOGLE_AI_API_KEY=your_google_ai_api_key_here
-   GOOGLE_AI_MODEL=gemini-2.0-flash-exp  # Optional, defaults to gemini-2.0-flash-exp
-   ```
+Example configuration:
+```toml
+# SRTran Configuration
 
-   ### OpenRouter Configuration
-   ```env
-   OPENROUTER_API_KEY=your_openrouter_api_key_here
-   OPENROUTER_MODEL=anthropic/claude-3.5-sonnet  # Optional, defaults to anthropic/claude-3.5-sonnet
-   ```
+# Backend can be: googleai, openai, or openrouter
+backend = "googleai"
 
-   ### OpenAI Configuration
-   ```env
-   OPENAI_API_KEY=your_openai_api_key_here
-   OPENAI_MODEL=gpt-4  # Optional, defaults to gpt-4
-   ```
+# Model depends on the backend selected
+model = "gemini-2.0-flash-exp"
 
-The tool will try to use the API keys in the following order:
-1. Google AI Studio (if `GOOGLE_AI_API_KEY` is set)
-2. OpenRouter (if `OPENROUTER_API_KEY` is set)
-3. OpenAI (if `OPENAI_API_KEY` is set)
+# API key for the selected backend
+api_key = "your_api_key_here"
 
-Note: You can also set these environment variables directly in your shell:
-```bash
-export GOOGLE_AI_API_KEY='your-google-ai-api-key-here'
-export GOOGLE_AI_MODEL='gemini-2.0-flash-exp'  # Optional
-# or
-export OPENROUTER_API_KEY='your-openrouter-api-key-here'
-export OPENROUTER_MODEL='anthropic/claude-3.5-sonnet'  # Optional
-# or
-export OPENAI_API_KEY='your-openai-api-key-here'
-export OPENAI_MODEL='gpt-4'  # Optional
+# Maximum requests per minute (0 for no limit)
+# Check the API docs for the limits of your selected backend/model
+rpm = 9
 ```
+
+You can also specify a custom config file location using the `-c` flag:
+```bash
+srtran translate -c /path/to/config.toml -i input.srt -o output.srt -s english -t norwegian
+```
+
+### Using Environment Variables
+
+Alternatively, you can use environment variables:
+```bash
+# Google AI Studio
+export GOOGLE_AI_API_KEY='your-key' GOOGLE_AI_MODEL='gemini-2.0-flash-exp'
+
+# OpenRouter
+export OPENROUTER_API_KEY='your-key' OPENROUTER_MODEL='anthropic/claude-3.5-sonnet'
+
+# OpenAI
+export OPENAI_API_KEY='your-key' OPENAI_MODEL='gpt-4'
+```
+
+The tool will try API keys in this order: Google AI → OpenRouter → OpenAI
 
 ## Usage
 
 ### Basic Translation
 
 ```bash
-srtran translate -i input.srt -o output.srt -s en -t es
+srtran translate -i input.srt -o output.srt -s english -t spanish
 ```
 
-This command translates subtitles from English (`en`) to Spanish (`es`).
+This command translates subtitles from English to Spanish.
 
 ### Command-line Options
 
 - `-i, --input`: Input subtitle file (required)
 - `-o, --output`: Output subtitle file (required)
-- `-s, --source-language`: Source language code (required)
-- `-t, --target-language`: Target language code (required)
+- `-s, --source-language`: Source language (required)
+- `-t, --target-language`: Target language (required)
 - `-v, --verbose`: Enable verbose output
 
 ### Examples
 
 1. Translate from English to French with verbose output:
    ```bash
-   srtran translate -i movie.srt -o movie_fr.srt -s en -t fr -v
+   srtran translate -i movie.srt -o movie_fr.srt -s english -t french -v
    ```
 
 2. Translate from Spanish to German:
    ```bash
-   srtran translate -i spanish.srt -o german.srt -s es -t de
+   srtran translate -i spanish.srt -o german.srt -s spanish -t german
    ```
 
 ### Version Information
@@ -116,27 +120,9 @@ Add `-v` for detailed version information:
 srtran version -v
 ```
 
-## Language Codes
+## Supported Languages
 
-Use standard ISO 639-1 two-letter language codes:
-
-- English: en
-- Spanish: es
-- French: fr
-- German: de
-- Italian: it
-- Portuguese: pt
-- And many more...
-
-## Error Handling
-
-SRTran includes robust error handling for common issues:
-
-- Missing or invalid API key
-- File not found or permission issues
-- Invalid subtitle file format
-- Network connectivity problems
-- API rate limiting
+SRTran supports translation between any language pair. The supported languages depend on the AI provider being used.
 
 ## Contributing
 

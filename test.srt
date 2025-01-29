@@ -1,14 +1,39 @@
 1
 00:00:01,000 --> 00:00:04,000
-Hello, welcome to this video.
-This is a test subtitle.
+Welcome to autobrr!
+The modern download automation tool.
 
 2
 00:00:04,500 --> 00:00:08,000
-We will use this to test
-our translation tool.
+autobrr monitors IRC channels and RSS feeds
+to help you maintain your tracker ratio.
 
 3
 00:00:08,500 --> 00:00:12,000
-Thank you for watching!
-Have a great day.
+Unlike Radarr and Sonarr that use RSS,
+autobrr gets you in the initial swarm.
+
+4
+00:00:12,500 --> 00:00:16,000
+When a new torrent is announced on IRC,
+autobrr grabs it instantly based on your filters.
+
+5
+00:00:16,500 --> 00:00:20,000
+It supports over 90 trackers with IRC announces,
+and integrates with all popular clients:
+
+6
+00:00:20,500 --> 00:00:24,000
+qBittorrent, Deluge, Transmission,
+and the entire *arr suite!
+
+7
+00:00:24,500 --> 00:00:28,000
+Built with Go and React,
+it's lightweight and cross-platform.
+
+8
+00:00:28,500 --> 00:00:32,000
+Get started today and join
+the early swarm on your trackers!

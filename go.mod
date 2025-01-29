@@ -1,4 +1,4 @@
-module github.com/soup/SRTran
+module github.com/s0up4200/SRTran
 
 go 1.23.5
 
