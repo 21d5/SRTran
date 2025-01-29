@@ -256,9 +256,8 @@ func (s *Service) translateBatchInternal(ctx context.Context, subtitles []srt.Su
 }
 
 func (s *Service) translateWithOpenAI(ctx context.Context, text string, sourceLang, targetLang string) ([][]string, error) {
-	model := openai.GPT4
-	if s.config.Model != "" {
-		model = s.config.Model
+	if s.config.Model == "" {
+		return nil, fmt.Errorf("model must be specified for OpenAI/OpenRouter backend")
 	}
 
 	if err := s.waitForRateLimit(ctx); err != nil {
@@ -268,7 +267,7 @@ func (s *Service) translateWithOpenAI(ctx context.Context, text string, sourceLa
 	resp, err := s.openaiClient.CreateChatCompletion(
 		ctx,
 		openai.ChatCompletionRequest{
-			Model: model,
+			Model: s.config.Model,
 			Messages: []openai.ChatCompletionMessage{
 				{
 					Role:    openai.ChatMessageRoleSystem,
@@ -329,9 +328,8 @@ func (s *Service) rateLimitBackoff(ctx context.Context, attempt int) error {
 }
 
 func (s *Service) translateWithGoogleAI(ctx context.Context, text string, sourceLang, targetLang string) ([][]string, error) {
-	model := "gemini-2.0-flash-exp"
-	if s.config.Model != "" {
-		model = s.config.Model
+	if s.config.Model == "" {
+		return nil, fmt.Errorf("model must be specified for Google AI backend")
 	}
 
 	prompt := fmt.Sprintf(translationPrompt, sourceLang, targetLang, text)
@@ -345,7 +343,7 @@ func (s *Service) translateWithGoogleAI(ctx context.Context, text string, source
 			return nil, fmt.Errorf("rate limit wait interrupted: %w", err)
 		}
 
-		result, err := s.googleClient.Models.GenerateContent(ctx, model, genai.Text(prompt), nil)
+		result, err := s.googleClient.Models.GenerateContent(ctx, s.config.Model, genai.Text(prompt), nil)
 		if err != nil {
 			// check for rate limit errors
 			if strings.Contains(err.Error(), "quota") ||
