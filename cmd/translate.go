@@ -8,9 +8,9 @@ import (
 	"os"
 
 	"github.com/rs/zerolog"
-	"github.com/s0up4200/SRTran/config"
-	"github.com/s0up4200/SRTran/srt"
-	"github.com/s0up4200/SRTran/translate"
+	"github.com/s0up4200/SRTran/internal/config"
+	"github.com/s0up4200/SRTran/internal/srt"
+	"github.com/s0up4200/SRTran/internal/translate"
 	"github.com/spf13/cobra"
 )
 

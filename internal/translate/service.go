@@ -13,31 +13,10 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
-	"github.com/s0up4200/SRTran/srt"
+	"github.com/s0up4200/SRTran/internal/srt"
 	openai "github.com/sashabaranov/go-openai"
 	"google.golang.org/genai"
 )
-
-// Backend represents the AI service provider
-type Backend string
-
-const (
-	BackendOpenAI     Backend = "openai"
-	BackendOpenRouter Backend = "openrouter"
-	BackendGoogleAI   Backend = "googleai"
-)
-
-// ServiceConfig holds the configuration for the translation service
-type ServiceConfig struct {
-	APIKey  string
-	BaseURL string
-	Model   string
-	Verbose bool
-	Backend Backend
-	// RPM is the maximum number of requests per minute
-	// if set to 0, no rate limiting is applied
-	RPM int
-}
 
 // Service handles the translation of subtitles using AI models
 type Service struct {
@@ -53,28 +32,6 @@ type Service struct {
 
 // batch size for translations
 const defaultBatchSize = 20
-
-// translationPrompt is the standard prompt template for all translation models
-const translationPrompt = `You are a professional subtitle translator. Translate exactly %s to %s following these rules:
-1. Preserve exact timing by keeping text length similar
-2. Maintain original line breaks and formatting symbols (e.g., <i>, [music])
-3. Never split or merge subtitle blocks
-4. Keep proper nouns/technical terms in original language when no direct translation exists
-5. Use colloquial speech matching the source register
-6. Handle idioms with culturally equivalent expressions
-7. Preserve numbers, measurements, and codes exactly
-8. Maintain capitalization style for on-screen text
-9. Keep placeholder markers like [%%1] unchanged
-10. Use contractions where natural for spoken language
-
-Format:
-[N] (subtitle number)
-Translated text (same line breaks)
-===SUBTITLE=== separator between blocks
-
-Here are the subtitles to translate:
-
-%s`
 
 // NewService creates a new translation service
 func NewService(config ServiceConfig) (*Service, error) {
@@ -199,7 +156,7 @@ func (s *Service) translateBatch(ctx context.Context, subtitles []srt.Subtitle, 
 	return translated, nil
 }
 
-// Move the actual translation logic to a separate method
+// translateBatchInternal handles the actual translation of a batch of subtitles
 func (s *Service) translateBatchInternal(ctx context.Context, subtitles []srt.Subtitle, sourceLang, targetLang string) ([]srt.Subtitle, error) {
 	if len(subtitles) == 0 {
 		return subtitles, nil
@@ -255,56 +212,6 @@ func (s *Service) translateBatchInternal(ctx context.Context, subtitles []srt.Su
 	return result, nil
 }
 
-func (s *Service) translateWithOpenAI(ctx context.Context, text string, sourceLang, targetLang string) ([][]string, error) {
-	if s.config.Model == "" {
-		return nil, fmt.Errorf("model must be specified for OpenAI/OpenRouter backend")
-	}
-
-	if err := s.waitForRateLimit(ctx); err != nil {
-		return nil, fmt.Errorf("rate limit wait interrupted: %w", err)
-	}
-
-	resp, err := s.openaiClient.CreateChatCompletion(
-		ctx,
-		openai.ChatCompletionRequest{
-			Model: s.config.Model,
-			Messages: []openai.ChatCompletionMessage{
-				{
-					Role:    openai.ChatMessageRoleSystem,
-					Content: fmt.Sprintf(translationPrompt, sourceLang, targetLang, text),
-				},
-			},
-		},
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to translate batch: %w", err)
-	}
-
-	// split response by subtitle separator
-	translations := strings.Split(resp.Choices[0].Message.Content, "===SUBTITLE===")
-
-	var cleanTranslations [][]string
-	for _, t := range translations {
-		t = strings.TrimSpace(t)
-		if t == "" {
-			continue
-		}
-
-		// remove the [N] prefix
-		if idx := strings.Index(t, "]\n"); idx != -1 {
-			t = strings.TrimSpace(t[idx+2:])
-		}
-
-		// split by natural line breaks
-		lines := strings.Split(t, "\n")
-		if len(lines) > 0 {
-			cleanTranslations = append(cleanTranslations, lines)
-		}
-	}
-
-	return cleanTranslations, nil
-}
-
 // rateLimitBackoff implements exponential backoff for rate limits
 func (s *Service) rateLimitBackoff(ctx context.Context, attempt int) error {
 	backoff := time.Duration(math.Pow(2, float64(attempt))) * time.Second
@@ -325,77 +232,6 @@ func (s *Service) rateLimitBackoff(ctx context.Context, attempt int) error {
 	case <-timer.C:
 		return nil
 	}
-}
-
-func (s *Service) translateWithGoogleAI(ctx context.Context, text string, sourceLang, targetLang string) ([][]string, error) {
-	if s.config.Model == "" {
-		return nil, fmt.Errorf("model must be specified for Google AI backend")
-	}
-
-	prompt := fmt.Sprintf(translationPrompt, sourceLang, targetLang, text)
-
-	maxAttempts := 5
-	var lastErr error
-
-	for attempt := 0; attempt < maxAttempts; attempt++ {
-		// wait for rate limit before making request
-		if err := s.waitForRateLimit(ctx); err != nil {
-			return nil, fmt.Errorf("rate limit wait interrupted: %w", err)
-		}
-
-		result, err := s.googleClient.Models.GenerateContent(ctx, s.config.Model, genai.Text(prompt), nil)
-		if err != nil {
-			// check for rate limit errors
-			if strings.Contains(err.Error(), "quota") ||
-				strings.Contains(err.Error(), "rate limit") ||
-				strings.Contains(err.Error(), "resource exhausted") {
-				lastErr = err
-				if err := s.rateLimitBackoff(ctx, attempt); err != nil {
-					return nil, fmt.Errorf("rate limit backoff interrupted: %w", err)
-				}
-				continue
-			}
-			return nil, fmt.Errorf("failed to translate batch: %w", err)
-		}
-
-		if len(result.Candidates) == 0 {
-			return nil, fmt.Errorf("no response from Google AI")
-		}
-
-		candidate := result.Candidates[0]
-		if candidate.Content == nil || len(candidate.Content.Parts) == 0 {
-			return nil, fmt.Errorf("empty response from Google AI")
-		}
-
-		// Get the text from the first part
-		responseText := candidate.Content.Parts[0].Text
-
-		// split response by subtitle separator
-		translations := strings.Split(responseText, "===SUBTITLE===")
-
-		var cleanTranslations [][]string
-		for _, t := range translations {
-			t = strings.TrimSpace(t)
-			if t == "" {
-				continue
-			}
-
-			// remove the [N] prefix
-			if idx := strings.Index(t, "]\n"); idx != -1 {
-				t = strings.TrimSpace(t[idx+2:])
-			}
-
-			// split by natural line breaks
-			lines := strings.Split(t, "\n")
-			if len(lines) > 0 {
-				cleanTranslations = append(cleanTranslations, lines)
-			}
-		}
-
-		return cleanTranslations, nil
-	}
-
-	return nil, fmt.Errorf("max retries exceeded due to rate limits: %w", lastErr)
 }
 
 // Translate processes all subtitles in batches
