@@ -8,3 +8,4 @@
 *.srt
 !test.srt
 dev.toml
+license.sh

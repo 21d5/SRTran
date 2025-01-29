@@ -1,3 +1,6 @@
+// Copyright (c) 2025, soup and the SRTran contributors.
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 package config
 
 import (
