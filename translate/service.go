@@ -3,8 +3,11 @@ package translate
 import (
 	"context"
 	"fmt"
+	"math"
 	"os"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/rs/zerolog"
 	openai "github.com/sashabaranov/go-openai"
@@ -28,6 +31,9 @@ type ServiceConfig struct {
 	Model   string
 	Verbose bool
 	Backend Backend
+	// RPM is the maximum number of requests per minute
+	// if set to 0, no rate limiting is applied
+	RPM int
 }
 
 // Service handles the translation of subtitles using AI models
@@ -37,6 +43,9 @@ type Service struct {
 	config       ServiceConfig
 	verbose      bool
 	logger       zerolog.Logger
+	// rate limiter fields
+	rateLimiter   *time.Ticker
+	rateLimiterMu sync.Mutex
 }
 
 // batch size for translations
@@ -52,6 +61,17 @@ func NewService(config ServiceConfig) (*Service, error) {
 		config:  config,
 		verbose: config.Verbose,
 		logger:  zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout}).With().Timestamp().Logger(),
+	}
+
+	// initialize rate limiter if RPM is set
+	if config.RPM > 0 {
+		// calculate interval between requests
+		interval := time.Minute / time.Duration(config.RPM)
+		service.rateLimiter = time.NewTicker(interval)
+		service.logger.Info().
+			Int("rpm", config.RPM).
+			Dur("interval", interval).
+			Msg("rate limiter initialized")
 	}
 
 	switch config.Backend {
@@ -78,8 +98,84 @@ func NewService(config ServiceConfig) (*Service, error) {
 	return service, nil
 }
 
+// waitForRateLimit waits for the rate limiter if it's configured
+func (s *Service) waitForRateLimit(ctx context.Context) error {
+	if s.rateLimiter == nil {
+		return nil
+	}
+
+	s.rateLimiterMu.Lock()
+	defer s.rateLimiterMu.Unlock()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-s.rateLimiter.C:
+		return nil
+	}
+}
+
+// Close cleans up resources used by the service
+func (s *Service) Close() {
+	if s.rateLimiter != nil {
+		s.rateLimiter.Stop()
+	}
+}
+
 // translateBatch translates a batch of subtitles
 func (s *Service) translateBatch(ctx context.Context, subtitles []srt.Subtitle, sourceLang, targetLang string) ([]srt.Subtitle, error) {
+	batchSize := 20 // or whatever the current batch size is
+	var translated []srt.Subtitle
+
+	for i := 0; i < len(subtitles); i += batchSize {
+		end := i + batchSize
+		if end > len(subtitles) {
+			end = len(subtitles)
+		}
+
+		batch := subtitles[i:end]
+
+		// Retry logic for rate limits
+		maxAttempts := 10
+		baseDelay := time.Second
+
+		for attempt := 0; attempt < maxAttempts; attempt++ {
+			// Wait for rate limiter
+			if err := s.waitForRateLimit(ctx); err != nil {
+				return nil, fmt.Errorf("rate limit wait error: %w", err)
+			}
+
+			batchTranslated, err := s.translateBatchInternal(ctx, batch, sourceLang, targetLang)
+			if err != nil {
+				if strings.Contains(err.Error(), "429") ||
+					strings.Contains(err.Error(), "RESOURCE_EXHAUSTED") {
+					delay := baseDelay * time.Duration(math.Pow(2, float64(attempt)))
+					s.logger.Warn().
+						Int("attempt", attempt).
+						Dur("backoff", delay).
+						Msg("rate limit hit, backing off")
+
+					select {
+					case <-ctx.Done():
+						return nil, ctx.Err()
+					case <-time.After(delay):
+						continue // retry after delay
+					}
+				}
+				return nil, fmt.Errorf("failed to translate batch %d-%d: %w", i, end, err)
+			}
+
+			translated = append(translated, batchTranslated...)
+
+			break // successful translation, move to next batch
+		}
+	}
+
+	return translated, nil
+}
+
+// Move the actual translation logic to a separate method
+func (s *Service) translateBatchInternal(ctx context.Context, subtitles []srt.Subtitle, sourceLang, targetLang string) ([]srt.Subtitle, error) {
 	if len(subtitles) == 0 {
 		return subtitles, nil
 	}
@@ -139,6 +235,11 @@ func (s *Service) translateWithOpenAI(ctx context.Context, text string, sourceLa
 	model := openai.GPT4
 	if s.config.Model != "" {
 		model = s.config.Model
+	}
+
+	// wait for rate limit before making request
+	if err := s.waitForRateLimit(ctx); err != nil {
+		return nil, fmt.Errorf("rate limit wait interrupted: %w", err)
 	}
 
 	resp, err := s.openaiClient.CreateChatCompletion(
@@ -202,6 +303,28 @@ func (s *Service) translateWithOpenAI(ctx context.Context, text string, sourceLa
 	return cleanTranslations, nil
 }
 
+// rateLimitBackoff implements exponential backoff for rate limits
+func (s *Service) rateLimitBackoff(ctx context.Context, attempt int) error {
+	backoff := time.Duration(math.Pow(2, float64(attempt))) * time.Second
+	if backoff > 30*time.Second {
+		backoff = 30 * time.Second
+	}
+
+	s.logger.Warn().
+		Int("attempt", attempt).
+		Dur("backoff", backoff).
+		Msg("rate limit hit, backing off")
+
+	timer := time.NewTimer(backoff)
+	select {
+	case <-ctx.Done():
+		timer.Stop()
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
 func (s *Service) translateWithGoogleAI(ctx context.Context, text string, sourceLang, targetLang string) ([][]string, error) {
 	model := "gemini-2.0-flash-exp"
 	if s.config.Model != "" {
@@ -227,46 +350,68 @@ func (s *Service) translateWithGoogleAI(ctx context.Context, text string, source
 			"Here are the subtitles to translate:\n\n%s",
 		sourceLang, targetLang, text)
 
-	result, err := s.googleClient.Models.GenerateContent(ctx, model, genai.Text(prompt), nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to translate batch: %w", err)
-	}
+	maxAttempts := 5
+	var lastErr error
 
-	if len(result.Candidates) == 0 {
-		return nil, fmt.Errorf("no response from Google AI")
-	}
-
-	candidate := result.Candidates[0]
-	if candidate.Content == nil || len(candidate.Content.Parts) == 0 {
-		return nil, fmt.Errorf("empty response from Google AI")
-	}
-
-	// Get the text from the first part
-	responseText := candidate.Content.Parts[0].Text
-
-	// split response by subtitle separator
-	translations := strings.Split(responseText, "===SUBTITLE===")
-
-	var cleanTranslations [][]string
-	for _, t := range translations {
-		t = strings.TrimSpace(t)
-		if t == "" {
-			continue
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		// wait for rate limit before making request
+		if err := s.waitForRateLimit(ctx); err != nil {
+			return nil, fmt.Errorf("rate limit wait interrupted: %w", err)
 		}
 
-		// remove the [N] prefix
-		if idx := strings.Index(t, "]\n"); idx != -1 {
-			t = strings.TrimSpace(t[idx+2:])
+		result, err := s.googleClient.Models.GenerateContent(ctx, model, genai.Text(prompt), nil)
+		if err != nil {
+			// check for rate limit errors
+			if strings.Contains(err.Error(), "quota") ||
+				strings.Contains(err.Error(), "rate limit") ||
+				strings.Contains(err.Error(), "resource exhausted") {
+				lastErr = err
+				if err := s.rateLimitBackoff(ctx, attempt); err != nil {
+					return nil, fmt.Errorf("rate limit backoff interrupted: %w", err)
+				}
+				continue
+			}
+			return nil, fmt.Errorf("failed to translate batch: %w", err)
 		}
 
-		// split by natural line breaks
-		lines := strings.Split(t, "\n")
-		if len(lines) > 0 {
-			cleanTranslations = append(cleanTranslations, lines)
+		if len(result.Candidates) == 0 {
+			return nil, fmt.Errorf("no response from Google AI")
 		}
+
+		candidate := result.Candidates[0]
+		if candidate.Content == nil || len(candidate.Content.Parts) == 0 {
+			return nil, fmt.Errorf("empty response from Google AI")
+		}
+
+		// Get the text from the first part
+		responseText := candidate.Content.Parts[0].Text
+
+		// split response by subtitle separator
+		translations := strings.Split(responseText, "===SUBTITLE===")
+
+		var cleanTranslations [][]string
+		for _, t := range translations {
+			t = strings.TrimSpace(t)
+			if t == "" {
+				continue
+			}
+
+			// remove the [N] prefix
+			if idx := strings.Index(t, "]\n"); idx != -1 {
+				t = strings.TrimSpace(t[idx+2:])
+			}
+
+			// split by natural line breaks
+			lines := strings.Split(t, "\n")
+			if len(lines) > 0 {
+				cleanTranslations = append(cleanTranslations, lines)
+			}
+		}
+
+		return cleanTranslations, nil
 	}
 
-	return cleanTranslations, nil
+	return nil, fmt.Errorf("max retries exceeded due to rate limits: %w", lastErr)
 }
 
 // Translate processes all subtitles in batches
@@ -294,12 +439,12 @@ func (s *Service) Translate(ctx context.Context, subtitles []srt.Subtitle, sourc
 
 		result = append(result, translated...)
 
-		s.logger.Debug().
-			Int("batch_start", i).
-			Int("batch_end", end).
+		// Simplified progress logging
+		s.logger.Info().
 			Int("processed", len(result)).
-			Int("total", len(subtitles)).
-			Msg("batch processed")
+			Int("remaining", len(subtitles)-len(result)).
+			Int("percent", int(float64(len(result))/float64(len(subtitles))*100)).
+			Msg("translation progress")
 	}
 
 	return result, nil

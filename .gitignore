@@ -1,3 +1,9 @@
-SRTran
+/SRTran
+/SRTran.exe
+/srtran
+/srtran.exe
+/build/
 .DS_Store
 .env
+*.srt
+dev.toml

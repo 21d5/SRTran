@@ -1,0 +1,14 @@
+# SRTran Configuration
+
+# Backend can be: googleai, openai, or openrouter
+backend = "googleai"
+
+# Model depends on the backend selected
+model = "gemini-2.0-flash-exp"
+
+# API key for the selected backend
+api_key = "your_api_key_here"
+
+# Maximum requests per minute (0 for no limit)
+# Check the API docs for the limits of your selected backend/model
+rpm = 9
