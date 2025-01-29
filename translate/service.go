@@ -70,10 +70,6 @@ func (s *Service) translateBatch(ctx context.Context, subtitles []srt.Subtitle, 
 		batchText.WriteString("\n")
 	}
 
-	//s.logger.Trace().
-	//	Str("batch_text", batchText.String()).
-	//	Msg("sending batch for translation")
-
 	// use configured model or fallback to GPT-4
 	model := openai.GPT4
 	if s.config.Model != "" {
@@ -116,10 +112,6 @@ func (s *Service) translateBatch(ctx context.Context, subtitles []srt.Subtitle, 
 		return nil, fmt.Errorf("failed to translate batch: %w", err)
 	}
 
-	//s.logger.Trace().
-	//	Str("response", resp.Choices[0].Message.Content).
-	//	Msg("received translation response")
-
 	// split response by subtitle separator
 	translations := strings.Split(resp.Choices[0].Message.Content, "===SUBTITLE===")
 
@@ -152,7 +144,13 @@ func (s *Service) translateBatch(ctx context.Context, subtitles []srt.Subtitle, 
 	result := make([]srt.Subtitle, len(subtitles))
 	copy(result, subtitles)
 	for i := range result {
-		result[i].Text = cleanTranslations[i]
+		result[i].Translated = cleanTranslations[i]
+		if s.verbose {
+			s.logger.Debug().
+				Str("original", strings.Join(result[i].Text, "\n")).
+				Str("translated", strings.Join(result[i].Translated, "\n")).
+				Msg("translation completed")
+		}
 	}
 
 	return result, nil

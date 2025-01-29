@@ -15,7 +15,7 @@ var translateCmd = &cobra.Command{
 	Long: `Translate subtitle files from one language to another using OpenAI.
 	
 Example:
-  srtran translate -i input.srt -o output.srt -s en -t es`,
+  srtran translate -i input.srt -o output.srt -s english -t norwegian`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Validate flags
 		if inputFile == "" {
@@ -93,11 +93,11 @@ Example:
 }
 
 func init() {
-	rootCmd.AddCommand(translateCmd)
-
-	// Add flags specific to the translate command
 	translateCmd.Flags().StringVarP(&inputFile, "input", "i", "", "input subtitle file")
 	translateCmd.Flags().StringVarP(&outputFile, "output", "o", "", "output subtitle file")
-	translateCmd.Flags().StringVarP(&targetLanguage, "target-language", "t", "", "target language (e.g., es, fr, de)")
-	translateCmd.Flags().StringVarP(&sourceLanguage, "source-language", "s", "", "source language (e.g., en, es, fr)")
+	translateCmd.Flags().StringVarP(&sourceLanguage, "source-language", "s", "", "source language (e.g., 'english', 'spanish')")
+	translateCmd.Flags().StringVarP(&targetLanguage, "target-language", "t", "", "target language (e.g., 'norwegian', 'german')")
+	translateCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "verbose output")
+
+	rootCmd.AddCommand(translateCmd)
 }
