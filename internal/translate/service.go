@@ -35,8 +35,9 @@ const defaultBatchSize = 20
 
 // NewService creates a new translation service
 func NewService(config ServiceConfig) (*Service, error) {
-	if config.APIKey == "" {
-		return nil, fmt.Errorf("API key is required")
+	// API key is required for all backends except LM Studio
+	if config.APIKey == "" && config.Backend != BackendLMStudio {
+		return nil, fmt.Errorf("API key is required for %s backend", config.Backend)
 	}
 
 	service := &Service{
@@ -62,6 +63,13 @@ func NewService(config ServiceConfig) (*Service, error) {
 		service.openaiClient = openai.NewClientWithConfig(clientConfig)
 	case BackendOpenRouter:
 		clientConfig := openai.DefaultConfig(config.APIKey)
+		clientConfig.BaseURL = config.BaseURL
+		service.openaiClient = openai.NewClientWithConfig(clientConfig)
+	case BackendLMStudio:
+		if config.BaseURL == "" {
+			config.BaseURL = "http://localhost:1234/v1"
+		}
+		clientConfig := openai.DefaultConfig("") // Empty API key is fine for LM Studio
 		clientConfig.BaseURL = config.BaseURL
 		service.openaiClient = openai.NewClientWithConfig(clientConfig)
 	case BackendGoogleAI:
@@ -178,8 +186,12 @@ func (s *Service) translateBatchInternal(ctx context.Context, subtitles []srt.Su
 	var err error
 
 	switch s.config.Backend {
-	case BackendOpenAI, BackendOpenRouter:
+	case BackendOpenAI:
 		cleanTranslations, err = s.translateWithOpenAI(ctx, batchText.String(), sourceLang, targetLang)
+	case BackendOpenRouter:
+		cleanTranslations, err = s.translateWithOpenRouter(ctx, batchText.String(), sourceLang, targetLang)
+	case BackendLMStudio:
+		cleanTranslations, err = s.translateWithLMStudio(ctx, batchText.String(), sourceLang, targetLang)
 	case BackendGoogleAI:
 		cleanTranslations, err = s.translateWithGoogleAI(ctx, batchText.String(), sourceLang, targetLang)
 	default:

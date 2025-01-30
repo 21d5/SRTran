@@ -1,6 +1,6 @@
 # SRTran Configuration
 
-# Backend can be: googleai, openai, or openrouter
+# Backend can be: googleai, openai, openrouter, or lmstudio
 backend = "googleai"
 
 # Model depends on the backend selected
@@ -9,6 +9,17 @@ model = "gemini-2.0-flash-exp"
 # API key for the selected backend
 api_key = "your_api_key_here"
 
+# Base URL for the API (required for openrouter and lmstudio)
+# base_url = "https://openrouter.ai/api/v1"  # for openrouter
+# base_url = "http://localhost:1234/v1"      # for lmstudio
+
 # Maximum requests per minute (0 for no limit)
 # Check the API docs for the limits of your selected backend/model
 rpm = 9
+
+# Example LM Studio configuration:
+# backend = "lmstudio"
+# base_url = "http://localhost:1234/v1"  # Default LM Studio API endpoint
+# model = "qwen2.5-7b-instruct-1m"  # The name of your loaded model in LM Studio
+# No API key needed for LM Studio
+# rpm = 2  # Adjust based on your hardware capabilities

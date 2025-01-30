@@ -10,6 +10,7 @@ const (
 	BackendOpenAI     Backend = "openai"
 	BackendOpenRouter Backend = "openrouter"
 	BackendGoogleAI   Backend = "googleai"
+	BackendLMStudio   Backend = "lmstudio"
 )
 
 // ServiceConfig holds the configuration for the translation service

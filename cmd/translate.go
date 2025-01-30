@@ -80,9 +80,12 @@ Example:
 			Backend: translate.Backend(cfg.Backend),
 		}
 
-		// If using OpenRouter, configure its specific settings
-		if cfg.Backend == "openrouter" {
+		// Configure backend-specific settings
+		switch cfg.Backend {
+		case "openrouter":
 			config.BaseURL = "https://openrouter.ai/api/v1"
+		case "lmstudio":
+			config.BaseURL = cfg.BaseURL
 		}
 
 		// Initialize translation service

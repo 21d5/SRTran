@@ -17,6 +17,7 @@ type Config struct {
 	Backend string `toml:"backend"`
 	Model   string `toml:"model"`
 	APIKey  string `toml:"api_key"`
+	BaseURL string `toml:"base_url"`
 	RPM     int    `toml:"rpm"`
 }
 
@@ -88,6 +89,20 @@ func LoadConfig(configFile string) (*Config, error) {
 			config.Model = model
 		}
 		if rpm := os.Getenv("OPENAI_RPM"); rpm != "" {
+			if val, err := strconv.Atoi(rpm); err == nil {
+				config.RPM = val
+			}
+		}
+	} else if apiKey := os.Getenv("LMSTUDIO_API_KEY"); apiKey != "" {
+		config.Backend = "lmstudio"
+		config.APIKey = apiKey
+		if baseURL := os.Getenv("LMSTUDIO_BASE_URL"); baseURL != "" {
+			config.BaseURL = baseURL
+		}
+		if model := os.Getenv("LMSTUDIO_MODEL"); model != "" {
+			config.Model = model
+		}
+		if rpm := os.Getenv("LMSTUDIO_RPM"); rpm != "" {
 			if val, err := strconv.Atoi(rpm); err == nil {
 				config.RPM = val
 			}
