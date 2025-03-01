@@ -170,58 +170,80 @@ func (s *Service) translateBatchInternal(ctx context.Context, subtitles []srt.Su
 		return subtitles, nil
 	}
 
-	// combine subtitle texts with numbered markers
-	var batchText strings.Builder
-	for i, sub := range subtitles {
-		if i > 0 {
-			batchText.WriteString("\n===SUBTITLE===\n")
+	maxRetries := 3
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		// combine subtitle texts with numbered markers
+		var batchText strings.Builder
+		for i, sub := range subtitles {
+			if i > 0 {
+				batchText.WriteString("\n===SUBTITLE===\n")
+			}
+			batchText.WriteString(fmt.Sprintf("[%d]\n", i+1))
+			batchText.WriteString(strings.Join(sub.Text, "\n"))
+			batchText.WriteString("\n")
 		}
-		batchText.WriteString(fmt.Sprintf("[%d]\n", i+1))
-		// preserve original line breaks
-		batchText.WriteString(strings.Join(sub.Text, "\n"))
-		batchText.WriteString("\n")
-	}
 
-	var cleanTranslations [][]string
-	var err error
+		var cleanTranslations [][]string
+		var err error
 
-	switch s.config.Backend {
-	case BackendOpenAI:
-		cleanTranslations, err = s.translateWithOpenAI(ctx, batchText.String(), sourceLang, targetLang)
-	case BackendOpenRouter:
-		cleanTranslations, err = s.translateWithOpenRouter(ctx, batchText.String(), sourceLang, targetLang)
-	case BackendLMStudio:
-		cleanTranslations, err = s.translateWithLMStudio(ctx, batchText.String(), sourceLang, targetLang)
-	case BackendGoogleAI:
-		cleanTranslations, err = s.translateWithGoogleAI(ctx, batchText.String(), sourceLang, targetLang)
-	default:
-		return nil, fmt.Errorf("unsupported backend: %s", s.config.Backend)
-	}
+		switch s.config.Backend {
+		case BackendOpenAI:
+			cleanTranslations, err = s.translateWithOpenAI(ctx, batchText.String(), sourceLang, targetLang)
+		case BackendOpenRouter:
+			cleanTranslations, err = s.translateWithOpenRouter(ctx, batchText.String(), sourceLang, targetLang)
+		case BackendLMStudio:
+			cleanTranslations, err = s.translateWithLMStudio(ctx, batchText.String(), sourceLang, targetLang)
+		case BackendGoogleAI:
+			cleanTranslations, err = s.translateWithGoogleAI(ctx, batchText.String(), sourceLang, targetLang)
+		default:
+			return nil, fmt.Errorf("unsupported backend: %s", s.config.Backend)
+		}
 
-	if err != nil {
-		return nil, err
-	}
+		if err != nil {
+			if attempt < maxRetries {
+				s.logger.Warn().
+					Int("attempt", attempt+1).
+					Int("max_retries", maxRetries).
+					Err(err).
+					Msg("translation attempt failed, retrying")
+				continue
+			}
+			return nil, err
+		}
 
-	// ensure we got the same number of translations as inputs
-	if len(cleanTranslations) != len(subtitles) {
-		return nil, fmt.Errorf("received %d translations for %d subtitles",
-			len(cleanTranslations), len(subtitles))
-	}
+		// If we got fewer translations than expected but not zero
+		if len(cleanTranslations) > 0 && len(cleanTranslations) < len(subtitles) {
+			if attempt < maxRetries {
+				s.logger.Warn().
+					Int("expected", len(subtitles)).
+					Int("received", len(cleanTranslations)).
+					Int("attempt", attempt+1).
+					Msg("received partial translations, retrying")
+				continue
+			}
+			// On final attempt, abort with error
+			return nil, fmt.Errorf("failed to get complete translations after %d attempts: expected %d, got %d",
+				maxRetries, len(subtitles), len(cleanTranslations))
+		}
 
-	// update subtitle texts with translations
-	result := make([]srt.Subtitle, len(subtitles))
-	copy(result, subtitles)
-	for i := range result {
-		result[i].Translated = cleanTranslations[i]
-		if s.verbose {
-			s.logger.Debug().
-				Str("original", strings.Join(result[i].Text, "\n")).
-				Str("translated", strings.Join(result[i].Translated, "\n")).
-				Msg("translation completed")
+		// Success case - we got the expected number of translations
+		if len(cleanTranslations) == len(subtitles) {
+			result := make([]srt.Subtitle, len(subtitles))
+			copy(result, subtitles)
+			for i := range result {
+				result[i].Translated = cleanTranslations[i]
+				if s.verbose {
+					s.logger.Debug().
+						Str("original", strings.Join(result[i].Text, "\n")).
+						Str("translated", strings.Join(result[i].Translated, "\n")).
+						Msg("translation completed")
+				}
+			}
+			return result, nil
 		}
 	}
 
-	return result, nil
+	return nil, fmt.Errorf("failed to get complete translations after %d attempts", maxRetries)
 }
 
 // rateLimitBackoff implements exponential backoff for rate limits

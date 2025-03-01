@@ -14,11 +14,12 @@ import (
 )
 
 type Config struct {
-	Backend string `toml:"backend"`
-	Model   string `toml:"model"`
-	APIKey  string `toml:"api_key"`
-	BaseURL string `toml:"base_url"`
-	RPM     int    `toml:"rpm"`
+	Backend   string `toml:"backend"`
+	Model     string `toml:"model"`
+	APIKey    string `toml:"api_key"`
+	BaseURL   string `toml:"base_url"`
+	RPM       int    `toml:"rpm"`
+	BatchSize int    `toml:"batch_size"`
 }
 
 // configPaths returns a list of paths to check for config files
