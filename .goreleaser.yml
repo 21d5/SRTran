@@ -57,13 +57,13 @@ changelog:
       - Merge branch
 
 # Homebrew formula
-brews:
-  - homepage: https://github.com/s0up4200/SRTran
-    description: A tool to translate .srt subtitles from one language to another
-    license: GPL-2.0-or-later
-    repository:
-      owner: s0up4200
-      name: homebrew-srtran
-    directory: Formula
-    test: |
-      system "#{bin}/srtran version" 
+#brews:
+#  - homepage: https://github.com/s0up4200/SRTran
+#    description: A tool to translate .srt subtitles from one language to another
+#    license: GPL-2.0-or-later
+#    repository:
+#      owner: s0up4200
+#      name: homebrew-srtran
+#    directory: Formula
+#    test: |
+#      system "#{bin}/srtran version" 
