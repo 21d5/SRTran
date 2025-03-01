@@ -4,7 +4,7 @@
 backend = "googleai"
 
 # Model depends on the backend selected
-model = "gemini-2.0-flash-exp"
+model = "gemini-2.0-flash"
 
 # API key for the selected backend
 api_key = "your_api_key_here"
