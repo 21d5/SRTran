@@ -9,7 +9,7 @@ SRTran is a command-line tool for translating subtitle files (.srt) from one lan
   - Google AI Studio (Gemini)
   - OpenAI
   - OpenRouter
-- Preserve subtitle timing and formatting
+  - LM Studio
 - Easy-to-use command-line interface
 
 ## Configuration
