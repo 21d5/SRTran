@@ -129,7 +129,7 @@ func (p *Parser) Write(filename string, subtitles []Subtitle) error {
 		// Write translated text or original if translation is empty
 		text := sub.Text
 		if len(sub.Translated) > 0 {
-			text = fmt.Fprintf(writer, "%s\n%s", sub.Text, sub.Translated)
+			text = fmt.Sprintf("%s\n%s", sub.Text, sub.Translated)
 		}
 		for _, line := range text {
 			if _, err := fmt.Fprintf(writer, "%s\n", line); err != nil {
